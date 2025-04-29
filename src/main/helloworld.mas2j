@@ -1,0 +1,12 @@
+MAS helloworld {
+
+	infrastructure: Centralised
+
+	environment: env.SemaphoreEnvironment()
+
+	agents:
+		agent1 semaphore_junction;
+
+	aslSourcePath:
+		"src/main/asl";
+}
