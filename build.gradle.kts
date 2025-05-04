@@ -10,8 +10,13 @@ repositories {
 }
 
 dependencies {
+    // https://mvnrepository.com/artifact/org.eclipse.paho/org.eclipse.paho.client.mqttv3
+    implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
     // https://mvnrepository.com/artifact/org.jason-lang/jason
     implementation("io.github.jason-lang:interpreter:3.2.0")
+    // https://mvnrepository.com/artifact/com.google.code.gson/gson
+    implementation("com.google.code.gson:gson:2.13.1")
+
     testImplementation(platform("org.junit:junit-bom:5.9.1"))
     testImplementation("org.junit.jupiter:junit-jupiter")
 }
