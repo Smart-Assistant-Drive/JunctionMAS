@@ -5,6 +5,14 @@ public enum SemaphoreColors {
     YELLOW,
     RED;
 
+    public static SemaphoreColors getFromValue(String value) {
+        return switch (value) {
+            case "green" -> GREEN;
+            case "red" -> RED;
+            case "yellow" -> YELLOW;
+            default -> throw new IllegalStateException("Unexpected value: " + value);
+        };
+    }
 
     @Override
     public String toString() {
