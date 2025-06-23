@@ -1,5 +1,6 @@
 package env;
 
+import Utils.EnvironmentVariable;
 import Utils.JsonSerializer;
 import Utils.SemaphoreColors;
 import com.google.gson.JsonObject;
@@ -20,6 +21,8 @@ import java.net.http.HttpResponse;
 import java.util.*;
 import java.util.stream.Stream;
 
+import static Utils.EnvironmentVariable.*;
+
 public class SemaphoreEnvironment extends Environment {
     
     private final String GREEN = SemaphoreColors.GREEN.toString();
@@ -36,6 +39,11 @@ public class SemaphoreEnvironment extends Environment {
 
     private int numEffectiveSemaphores = 4;
 
+    EnvironmentVariable mqttHost = new EnvironmentVariable(MQTT_HOST, "127.0.0.1");
+    EnvironmentVariable mqttPort = new EnvironmentVariable(MQTT_PORT, "1883");
+    EnvironmentVariable dtHost = new EnvironmentVariable(DT_HOST, "localhost");
+    EnvironmentVariable dtBasePort = new EnvironmentVariable(DT_BASE_PORT, "8080");
+
     // TODO politiche: alternato o fisso su un verso in assenza di auto nell'altro
 
     @Override
@@ -48,6 +56,7 @@ public class SemaphoreEnvironment extends Environment {
             }
         }
 
+
         for(int i = 0; i < numEffectiveSemaphores; i++) {
             if(i % 2 == 0) {
                 semaphoresStates.add(GREEN);
@@ -59,7 +68,7 @@ public class SemaphoreEnvironment extends Environment {
             // check the state of each digital twin to be compliant with the current agent beliefs, try to do it with mqtt events (check that a color change is equal to the agent belief)
             int finalI = i;
             MqttSubscriber.subscribeToMqttTopic(
-                    "tcp://127.0.0.1:1883",
+                    "tcp://" + mqttHost.getValue() + ":" + mqttPort.getValue(),
                     "kotlin_mqtt_subscriber_" + System.currentTimeMillis(),
                     "semaphore/" + i + "/change",
                     new SemaphoreChangeEventCallback((s) -> {
@@ -127,6 +136,7 @@ public class SemaphoreEnvironment extends Environment {
     private void updateDigitalTwins() {
         Stream.iterate(0, i -> i + 1).limit(4).map(i -> new Pair<String, Integer>(semaphoresStates.get(i), i)).forEach( i -> {
             try {
+                System.out.println("Update dt number " + i + "...");
                 executePost(i.getFirst(), i.getSecond());
             } catch (IOException | InterruptedException e) {
                 throw new RuntimeException(e);
@@ -161,9 +171,11 @@ public class SemaphoreEnvironment extends Environment {
     private void executePost(String color, int id) throws IOException, InterruptedException {
         HttpClient client = HttpClient.newBuilder().build();
         String json = "{\"color\":\"" + color + "\"}";
-        int port = 8080 + id;
+        int port = Integer.parseInt(dtBasePort.getValue()) + id;
+        String url =  "http://" + dtHost.getValue() + ":" + port + targetUrl;
+        System.out.println("INVIO A " + url);
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + targetUrl))
+                .uri(URI.create(url))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json))
                 .build();
@@ -172,9 +184,9 @@ public class SemaphoreEnvironment extends Environment {
 
     private String executeGet(int id) throws IOException, InterruptedException {
         HttpClient client = HttpClient.newBuilder().build();
-        int port = 8080 + id;
+        int port = Integer.parseInt(dtBasePort.getValue()) + id;
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + "/state/properties/light"))
+                .uri(URI.create("http://" + dtHost.getValue() + ":" + port + "/state/properties/light"))
                 .header("Content-Type", "application/json")
                 .GET()
                 .build();

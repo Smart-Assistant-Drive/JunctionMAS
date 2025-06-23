@@ -53,6 +53,14 @@ if (mas2jFiles.isEmpty()) {
     }
 }
 
+tasks.jar {
+    manifest {
+        attributes(
+            mapOf("Implementation-Title" to project.name, "Implementation-Version" to project.version)
+        )
+    }
+}
+
 tasks.test {
     useJUnitPlatform()
 }
