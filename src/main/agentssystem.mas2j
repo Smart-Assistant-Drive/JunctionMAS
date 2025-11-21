@@ -5,7 +5,8 @@ MAS helloworld {
 	environment: env.SemaphoreEnvironment()
 
 	agents:
-		agent1 semaphore_junction;
+		junction semaphore_junction;
+		timer timer_agent;
 
 	aslSourcePath:
 		"src/main/asl";

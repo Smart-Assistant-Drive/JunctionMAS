@@ -4,8 +4,9 @@ import Utils.EnvironmentVariable;
 import Utils.JsonSerializer;
 import Utils.SemaphoreColors;
 import com.google.gson.JsonObject;
-import digitalTwinInteraction.MqttSubscriber;
+import digitalTwinInteraction.mqtt.MqttSubscriber;
 import digitalTwinInteraction.SemaphoreChangeEventCallback;
+import digitalTwinInteraction.mqtt.MqttUpdate;
 import jason.NoValueException;
 import jason.asSyntax.Literal;
 import jason.asSyntax.NumberTerm;
@@ -32,6 +33,7 @@ public class SemaphoreEnvironment extends Environment {
     public static final String changeOneSemaphore = "changeOneSemaphore";
     public static final Literal setYellow = Literal.parseLiteral("setYellow");
     public static final Literal initSemaphores = Literal.parseLiteral("initSemaphores");
+    public static final String updateTimer = "updateTimer";
 
     private final String targetUrl = "/state/actions/changeLight";
 
@@ -42,7 +44,7 @@ public class SemaphoreEnvironment extends Environment {
     EnvironmentVariable mqttHost = new EnvironmentVariable(MQTT_HOST, "127.0.0.1");
     EnvironmentVariable mqttPort = new EnvironmentVariable(MQTT_PORT, "1883");
     EnvironmentVariable dtHost = new EnvironmentVariable(DT_HOST, "localhost");
-    EnvironmentVariable dtBasePort = new EnvironmentVariable(DT_BASE_PORT, "8080");
+    EnvironmentVariable dtBasePort = new EnvironmentVariable(DT_BASE_PORT, "8081");
 
     // TODO politiche: alternato o fisso su un verso in assenza di auto nell'altro
 
@@ -55,7 +57,6 @@ public class SemaphoreEnvironment extends Environment {
                 throw new IllegalArgumentException();
             }
         }
-
 
         for(int i = 0; i < numEffectiveSemaphores; i++) {
             if(i % 2 == 0) {
@@ -70,8 +71,9 @@ public class SemaphoreEnvironment extends Environment {
             MqttSubscriber.subscribeToMqttTopic(
                     "tcp://" + mqttHost.getValue() + ":" + mqttPort.getValue(),
                     "kotlin_mqtt_subscriber_" + System.currentTimeMillis(),
-                    "semaphore/" + i + "/change",
+                    "semaphore/" + i + "/light",
                     new SemaphoreChangeEventCallback((s) -> {
+                        System.out.println(semaphoresStates.get(finalI) + " - " + s);
                         if(!semaphoresStates.get(finalI).equals(s)) {
                             updateDigitalTwins();
                         }
@@ -119,13 +121,16 @@ public class SemaphoreEnvironment extends Environment {
                 } else {
                     throw new IndexOutOfBoundsException(id1 + " - " + id2 + " elements search in a array of " + semaphoresStates.size() + " elements");
                 }
+            } else if(action.getFunctor().equals(updateTimer)) {
+                int remainingTime = (int) ((NumberTerm)action.getTerm(0)).solve();
+                this.updateDtTimer(remainingTime);
             } else {
                 RuntimeException e = new IllegalArgumentException("Cannot handle action: " + action);
                 throw e;
             }
             Thread.sleep(500L); // Slowdown the system
         } catch (InterruptedException ignored) {
-        } catch (NoValueException e) {
+        } catch (NoValueException | IOException e) {
             throw new RuntimeException(e);
         }
 
@@ -180,6 +185,14 @@ public class SemaphoreEnvironment extends Environment {
                 .POST(HttpRequest.BodyPublishers.ofString(json))
                 .build();
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private void updateDtTimer(int secondsRemaining) throws IOException, InterruptedException {
+        MqttUpdate mqttUpdate = new MqttUpdate(mqttHost.getValue(), mqttPort.getValue(), "semaphore-agent");
+        Stream.iterate(0, i -> i + 1).limit(4).forEach( i -> {
+            System.out.println("Update dt number " + i + "...");
+            mqttUpdate.publishUpdate("semaphore/" + i + "/remaining_time", String.format("%d", secondsRemaining));
+        });
     }
 
     private String executeGet(int id) throws IOException, InterruptedException {
