@@ -1,0 +1,5 @@
+junctions:
+  - name: junction1
+    port: 8082
+  - name: junction2
+    port: 8086
