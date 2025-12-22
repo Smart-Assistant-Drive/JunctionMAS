@@ -1,6 +1,5 @@
 /* Initial beliefs and rules */
 time(5000).
-other(junction).
 
 /* Initial goals */
 !start.
@@ -8,6 +7,8 @@ other(junction).
 /* Plans */
 
 +!start : true <-
+    .my_name(S);
+    .print("Agente ", S, " pronto al lavoro!");
     !wait_timer_request;
     !send_restart_notification;
     !start.

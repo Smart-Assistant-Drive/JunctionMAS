@@ -13,6 +13,8 @@ import jason.asSyntax.NumberTerm;
 import jason.asSyntax.Structure;
 import jason.environment.Environment;
 import jason.util.Pair;
+import persistence.model.Junction;
+import persistence.reader.YamlReader;
 
 import java.io.*;
 import java.net.URI;
@@ -37,93 +39,114 @@ public class SemaphoreEnvironment extends Environment {
 
     private final String targetUrl = "/state/actions/changeLight";
 
-    private ArrayList<String> semaphoresStates = new ArrayList<>();
+    private final HashMap<String, ArrayList<String>> semaphoresStates = new HashMap<>();
+    private final HashMap<String, Integer> junctionBasePorts = new HashMap<>();
 
     private int numEffectiveSemaphores = 4;
+    private int numJunction = 1;
 
     EnvironmentVariable mqttHost = new EnvironmentVariable(MQTT_HOST, "127.0.0.1");
     EnvironmentVariable mqttPort = new EnvironmentVariable(MQTT_PORT, "1883");
     EnvironmentVariable dtHost = new EnvironmentVariable(DT_HOST, "localhost");
-    EnvironmentVariable dtBasePort = new EnvironmentVariable(DT_BASE_PORT, "8081");
-
-    // TODO politiche: alternato o fisso su un verso in assenza di auto nell'altro
+    EnvironmentVariable dtBasePort = new EnvironmentVariable(DT_BASE_PORT, "8082");
 
     @Override
     public void init(String[] args) {
         super.init(args);
-        if(args.length > 0) {
-            numEffectiveSemaphores = Integer.parseInt(args[0]);
-            if(numEffectiveSemaphores > 4 || numEffectiveSemaphores < 0) {
-                throw new IllegalArgumentException();
-            }
-        }
+        List<Junction> junctions = YamlReader.getJunctions();
+        this.initJunctions(junctions.stream().map(Junction::getName).toList());
+        junctions.forEach(junction -> {
+           this.junctionBasePorts.put(junction.getName(), junction.getPort());
+        });
+    }
 
-        for(int i = 0; i < numEffectiveSemaphores; i++) {
-            if(i % 2 == 0) {
-                semaphoresStates.add(GREEN);
-            } else {
-                semaphoresStates.add(RED);
-            }
+    private void initJunctions(List<String> junctions) {
+        for (String agName : junctions) {
+            System.out.println("Creo l'ambiente per l'agente: " + agName);
+            semaphoresStates.put(agName, new ArrayList<>());
 
-            // subscribe to each DT color change event topic in order to control every physical change on the semaphore
-            // check the state of each digital twin to be compliant with the current agent beliefs, try to do it with mqtt events (check that a color change is equal to the agent belief)
-            int finalI = i;
-            MqttSubscriber.subscribeToMqttTopic(
-                    "tcp://" + mqttHost.getValue() + ":" + mqttPort.getValue(),
-                    "kotlin_mqtt_subscriber_" + System.currentTimeMillis(),
-                    "semaphore/" + i + "/light",
-                    new SemaphoreChangeEventCallback((s) -> {
-                        System.out.println(semaphoresStates.get(finalI) + " - " + s);
-                        if(!semaphoresStates.get(finalI).equals(s)) {
-                            updateDigitalTwins();
-                        }
-                    })
-            );
+            // inizializzo i colori per ogni incrocio
+            for (int i = 0; i < numEffectiveSemaphores; i++) {
+                if (i % 2 == 0) {
+                    semaphoresStates.get(agName).add(GREEN);
+                } else {
+                    semaphoresStates.get(agName).add(RED);
+                }
+
+                // subscribe to each DT color change event topic in order to control every physical change on the semaphore
+                // check the state of each digital twin to be compliant with the current agent beliefs, try to do it with mqtt events (check that a color change is equal to the agent belief)
+                int finalI = i;
+                MqttSubscriber.subscribeToMqttTopic(
+                        "tcp://" + mqttHost.getValue() + ":" + mqttPort.getValue(),
+                        "kotlin_mqtt_subscriber_" + System.currentTimeMillis(),
+                        "semaphore/" + agName + "_" + i + "/light",
+                        new SemaphoreChangeEventCallback((s) -> {
+                            System.out.println(semaphoresStates.get(finalI) + " - " + s);
+                            if (!semaphoresStates.get(finalI).equals(s)) {
+                                updateDigitalTwins(agName);
+                            }
+                        })
+                );
+            }
         }
     }
 
     @Override
     public Collection<Literal> getPercepts(String agName) {
         final Set<Literal> set = new HashSet<>();
+        String index = agName.replaceAll("\\D", "");
+        if(agName.contains("timer")) {
+            Literal literal = Literal.parseLiteral("other(junction" + index + ")");
+            set.add(literal);
+        } else {
+            Literal literal = Literal.parseLiteral("other(timer" + index + ")");
+            set.add(literal);
+        }
+        if(semaphoresStates.containsKey(agName)) {
+            Literal semaphore1 = Literal.parseLiteral(String.format("semaphore(%s,%s)", "1", semaphoresStates.get(agName).get(0)));
+            Literal semaphore2 = Literal.parseLiteral(String.format("semaphore(%s,%s)", "2", semaphoresStates.get(agName).get(1)));
+            Literal semaphore3 = Literal.parseLiteral(String.format("semaphore(%s,%s)", "3", semaphoresStates.get(agName).get(2)));
+            Literal semaphore4 = Literal.parseLiteral(String.format("semaphore(%s,%s)", "4", semaphoresStates.get(agName).get(3)));
+            set.add(semaphore1);
+            set.add(semaphore2);
+            set.add(semaphore3);
+            set.add(semaphore4);
+        }
 
-        Literal semaphore1 = Literal.parseLiteral(String.format("semaphore(%s,%s)", "1", semaphoresStates.get(0)));
-        Literal semaphore2 = Literal.parseLiteral(String.format("semaphore(%s,%s)", "2", semaphoresStates.get(1)));
-        Literal semaphore3 = Literal.parseLiteral(String.format("semaphore(%s,%s)", "3", semaphoresStates.get(2)));
-        Literal semaphore4 = Literal.parseLiteral(String.format("semaphore(%s,%s)", "4", semaphoresStates.get(3)));
-        set.add(semaphore1);
-        set.add(semaphore2);
-        set.add(semaphore3);
-        set.add(semaphore4);
         return set;
     }
 
     @Override
     public boolean executeAction(String agName, Structure action) {
+        System.out.println("AGENT NAME: " + agName);
+        if(!semaphoresStates.containsKey(agName)) {
+            return true;
+        }
         boolean result = true;
         try {
             if (action.equals(change)) {
-                semaphoresStates.replaceAll(this::getNextLight);
+                semaphoresStates.get(agName).replaceAll(this::getNextLight);
             } else if (action.equals(setYellow)) {
-                semaphoresStates.replaceAll(this::getIntermediateLight);
+                semaphoresStates.get(agName).replaceAll(this::getIntermediateLight);
             } else if (action.equals(initSemaphores)) {
                 System.out.println("Init colors...");
-                semaphoresStates.set(0, RED);
-                semaphoresStates.set(1, GREEN);
-                semaphoresStates.set(2, RED);
-                semaphoresStates.set(3, GREEN);
+                semaphoresStates.get(agName).set(0, RED);
+                semaphoresStates.get(agName).set(1, GREEN);
+                semaphoresStates.get(agName).set(2, RED);
+                semaphoresStates.get(agName).set(3, GREEN);
             } else if (action.getFunctor().equals(changeOneSemaphore)) {
                 String color = action.getTerm(0).toString();
                 int id1 = (int) ((NumberTerm)action.getTerm(1)).solve() - 1;
                 int id2 = (int) ((NumberTerm)action.getTerm(2)).solve() - 1;
-                if (id1 >= 0 && id1 < semaphoresStates.size() && id2 >= 0 && id2 < semaphoresStates.size()) {
-                    semaphoresStates.set(id1, SemaphoreColors.getFromValue(color).toString());
-                    semaphoresStates.set(id2, SemaphoreColors.getFromValue(color).toString());
+                if (id1 >= 0 && id1 < semaphoresStates.get(agName).size() && id2 >= 0 && id2 < semaphoresStates.get(agName).size()) {
+                    semaphoresStates.get(agName).set(id1, SemaphoreColors.getFromValue(color).toString());
+                    semaphoresStates.get(agName).set(id2, SemaphoreColors.getFromValue(color).toString());
                 } else {
                     throw new IndexOutOfBoundsException(id1 + " - " + id2 + " elements search in a array of " + semaphoresStates.size() + " elements");
                 }
             } else if(action.getFunctor().equals(updateTimer)) {
                 int remainingTime = (int) ((NumberTerm)action.getTerm(0)).solve();
-                this.updateDtTimer(remainingTime);
+                this.updateDtTimer(remainingTime, agName);
             } else {
                 RuntimeException e = new IllegalArgumentException("Cannot handle action: " + action);
                 throw e;
@@ -134,15 +157,15 @@ public class SemaphoreEnvironment extends Environment {
             throw new RuntimeException(e);
         }
 
-        updateDigitalTwins();
+        updateDigitalTwins(agName);
         return result;
     }
 
-    private void updateDigitalTwins() {
-        Stream.iterate(0, i -> i + 1).limit(4).map(i -> new Pair<String, Integer>(semaphoresStates.get(i), i)).forEach( i -> {
+    private void updateDigitalTwins(String agName) {
+        Stream.iterate(0, i -> i + 1).limit(4).map(i -> new Pair<String, Integer>(semaphoresStates.get(agName).get(i), i)).forEach( i -> {
             try {
                 System.out.println("Update dt number " + i + "...");
-                executePost(i.getFirst(), i.getSecond());
+                executePost(i.getFirst(), agName, i.getSecond());
             } catch (IOException | InterruptedException e) {
                 throw new RuntimeException(e);
             }
@@ -173,10 +196,10 @@ public class SemaphoreEnvironment extends Environment {
         return returnValue;
     }
 
-    private void executePost(String color, int id) throws IOException, InterruptedException {
+    private void executePost(String color, String agName, int id) throws IOException, InterruptedException {
         HttpClient client = HttpClient.newBuilder().build();
         String json = "{\"color\":\"" + color + "\"}";
-        int port = Integer.parseInt(dtBasePort.getValue()) + id;
+        int port = junctionBasePorts.get(agName) + id;
         String url =  "http://" + dtHost.getValue() + ":" + port + targetUrl;
         System.out.println("INVIO A " + url);
         HttpRequest request = HttpRequest.newBuilder()
@@ -187,11 +210,11 @@ public class SemaphoreEnvironment extends Environment {
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
-    private void updateDtTimer(int secondsRemaining) throws IOException, InterruptedException {
+    private void updateDtTimer(int secondsRemaining, String agName) throws IOException, InterruptedException {
         MqttUpdate mqttUpdate = new MqttUpdate(mqttHost.getValue(), mqttPort.getValue(), "semaphore-agent");
         Stream.iterate(0, i -> i + 1).limit(4).forEach( i -> {
             System.out.println("Update dt number " + i + "...");
-            mqttUpdate.publishUpdate("semaphore/" + i + "/remaining_time", String.format("%d", secondsRemaining));
+            mqttUpdate.publishUpdate("semaphore/" + agName + "_" + i + "/remaining_time", String.format("%d", secondsRemaining));
         });
     }
 

@@ -1,5 +1,4 @@
 /* Initial beliefs and rules */
-other(timer).
 
 /* Initial goals */
 !start.

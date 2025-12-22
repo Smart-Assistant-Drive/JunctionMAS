@@ -16,6 +16,8 @@ dependencies {
     implementation("io.github.jason-lang:interpreter:3.2.0")
     // https://mvnrepository.com/artifact/com.google.code.gson/gson
     implementation("com.google.code.gson:gson:2.13.1")
+    // SnakeYAML YAML parser
+    implementation("org.yaml:snakeyaml:2.0")
 
     testImplementation(platform("org.junit:junit-bom:5.9.1"))
     testImplementation("org.junit.jupiter:junit-jupiter")
@@ -24,7 +26,7 @@ dependencies {
 // Apply a specific Java toolchain to ease working on different environments.
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 
@@ -47,7 +49,7 @@ if (mas2jFiles.isEmpty()) {
             standardInput = System.`in`
 
             javaLauncher.set(javaToolchains.launcherFor {
-                languageVersion.set(JavaLanguageVersion.of(17))
+                languageVersion.set(JavaLanguageVersion.of(21))
             })
         }
     }
