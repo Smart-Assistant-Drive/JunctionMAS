@@ -15,12 +15,12 @@ public class YamlReader {
 
     }
 
-    public static List<Junction> getJunctions(){
+    public static List<Junction> getJunctions(String fileName){
         Yaml yaml = new Yaml();
         List<Junction> junctionsList = new ArrayList<>();
         try {
             // Carica il file dalla cartella del progetto o dal classpath
-            File yamlFile = new File("src/main/resources/agents_description.yml");
+            File yamlFile = new File("src/main/resources/" + fileName + ".yml");
 
             // Carica l'intero file YAML nell'oggetto AppConfig
             FileReader reader = new FileReader(yamlFile);

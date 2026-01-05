@@ -53,7 +53,7 @@ public class SemaphoreEnvironment extends Environment {
     @Override
     public void init(String[] args) {
         super.init(args);
-        List<Junction> junctions = YamlReader.getJunctions();
+        List<Junction> junctions = YamlReader.getJunctions(args[0]);
         this.initJunctions(junctions.stream().map(Junction::getName).toList());
         junctions.forEach(junction -> {
            this.junctionBasePorts.put(junction.getName(), junction.getPort());

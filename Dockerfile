@@ -1,4 +1,4 @@
-FROM eclipse-temurin:17-jdk-alpine
+FROM eclipse-temurin:21-jdk-alpine
 LABEL authors="Daniele"
 COPY ./ $HOME/mas
 WORKDIR $HOME/mas

@@ -7,40 +7,40 @@
 
 +!start : true <-
     initSemaphores;
-    !temporalBehavior.
+    !temporalPlan.
 
 +semaphore(X, C) <-
     .print("Aggiornato semaforo ", X, " con colore ", C).
 
-+!temporalBehavior : semaphore(1, green) &  semaphore(2, red) & semaphore(3, green) & semaphore(4, red) <-
++!temporalPlan : semaphore(1, green) &  semaphore(2, red) & semaphore(3, green) & semaphore(4, red) <-
     !send_request;
     !wait_response;
     !yellowBehavior.
 
-+!temporalBehavior : semaphore(1, red) &  semaphore(2, green) & semaphore(3, red) & semaphore(4, green) <-
++!temporalPlan : semaphore(1, red) &  semaphore(2, green) & semaphore(3, red) & semaphore(4, green) <-
     !send_request;
     !wait_response;
     !yellowBehavior.
 
-+!temporalBehavior : semaphore(1, red) &  semaphore(2, yellow) & semaphore(3, red) & semaphore(4, yellow) <-
++!temporalPlan : semaphore(1, red) &  semaphore(2, yellow) & semaphore(3, red) & semaphore(4, yellow) <-
     !send_request;
     !wait_response;
     changeOneSemaphore(red, 2, 4);
     .wait(1000);
     changeOneSemaphore(green, 1, 3);
-    !temporalBehavior.
+    !temporalPlan.
 
-+!temporalBehavior : semaphore(1, yellow) &  semaphore(2, red) & semaphore(3, yellow) & semaphore(4, red) <-
++!temporalPlan : semaphore(1, yellow) &  semaphore(2, red) & semaphore(3, yellow) & semaphore(4, red) <-
    !send_request;
    !wait_response;
    changeOneSemaphore(red, 1, 3);
    .wait(1000);
    changeOneSemaphore(green, 2, 4);
-   !temporalBehavior.
+   !temporalPlan.
 
 +!yellowBehavior : true <-
     setYellow;
-    !temporalBehavior.
+    !temporalPlan.
 
 +!changeColor(C): true <-
     .print("changing color in... ", C);
