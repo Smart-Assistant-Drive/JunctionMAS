@@ -3,6 +3,7 @@ package env;
 import Utils.EnvironmentVariable;
 import Utils.JsonSerializer;
 import Utils.SemaphoreColors;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import digitalTwinInteraction.mqtt.MqttSubscriber;
 import digitalTwinInteraction.SemaphoreChangeEventCallback;
@@ -14,6 +15,7 @@ import jason.asSyntax.Structure;
 import jason.environment.Environment;
 import jason.util.Pair;
 import persistence.model.Junction;
+import persistence.model.Road;
 import persistence.reader.YamlReader;
 
 import java.io.*;
@@ -41,6 +43,7 @@ public class SemaphoreEnvironment extends Environment {
 
     private final HashMap<String, ArrayList<String>> semaphoresStates = new HashMap<>();
     private final HashMap<String, Integer> junctionBasePorts = new HashMap<>();
+    private final HashMap<String, ArrayList<Integer>> semaphoresPorts = new HashMap<>();
 
     private int numEffectiveSemaphores = 4;
     private int numJunction = 1;
@@ -57,6 +60,20 @@ public class SemaphoreEnvironment extends Environment {
         this.initJunctions(junctions.stream().map(Junction::getName).toList());
         junctions.forEach(junction -> {
            this.junctionBasePorts.put(junction.getName(), junction.getPort());
+           ArrayList<Integer> ports = new ArrayList<>();
+           List<Road> roads = junction.getRoads();
+           for(int i = 0; i < roads.size(); i++){
+               try {
+                   String port = this.getSemaphorePort(roads.get(i).getName(), roads.get(i).getDirection());
+                   System.out.println("Aggiungo porta " + port + " per semaforo " + junction.getName() + " nell'indice " + i + " per strada " + roads.get(i).getName());
+                   ports.add(Integer.parseInt(port));
+               } catch (IOException | InterruptedException e) {
+                   System.out.println("ERRORE");
+                   throw new RuntimeException(e);
+               }
+           }
+           this.semaphoresPorts.put(junction.getName(), ports);
+
         });
     }
 
@@ -199,7 +216,8 @@ public class SemaphoreEnvironment extends Environment {
     private void executePost(String color, String agName, int id) throws IOException, InterruptedException {
         HttpClient client = HttpClient.newBuilder().build();
         String json = "{\"color\":\"" + color + "\"}";
-        int port = junctionBasePorts.get(agName) + id;
+        // int port = junctionBasePorts.get(agName) + id;
+        String port = this.semaphoresPorts.get(agName).get(id).toString();
         String url =  "http://" + dtHost.getValue() + ":" + port + targetUrl;
         System.out.println("INVIO A " + url);
         HttpRequest request = HttpRequest.newBuilder()
@@ -218,19 +236,19 @@ public class SemaphoreEnvironment extends Environment {
         });
     }
 
-    private String executeGet(int id) throws IOException, InterruptedException {
+    private String getSemaphorePort(String road, String direction) throws IOException, InterruptedException {
         HttpClient client = HttpClient.newBuilder().build();
-        int port = Integer.parseInt(dtBasePort.getValue()) + id;
+        int port = 8087;
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("http://" + dtHost.getValue() + ":" + port + "/state/properties/light"))
+                .uri(URI.create("http://" + dtHost.getValue() + ":" + port + "/semaphores/" + road + "/" + direction))
                 .header("Content-Type", "application/json")
                 .GET()
                 .build();
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
         System.out.println(response.body());
-        JsonObject json = JsonSerializer.stringToJsonObjectGson(response.body());
-        System.out.println(json);
-
-        return json.get("value").toString().replaceAll("\"", "");
+        JsonArray json = JsonSerializer.stringToJsonArrayGson(response.body());
+        if(json.isEmpty())
+            return "";
+        return json.get(0).getAsJsonObject().get("link").toString().replaceAll("\"", "").split(":")[1];
     }
 }

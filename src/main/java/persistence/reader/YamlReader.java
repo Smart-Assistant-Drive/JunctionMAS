@@ -18,6 +18,7 @@ public class YamlReader {
     public static List<Junction> getJunctions(String fileName){
         Yaml yaml = new Yaml();
         List<Junction> junctionsList = new ArrayList<>();
+        List<String> roads = new ArrayList<>();
         try {
             // Carica il file dalla cartella del progetto o dal classpath
             File yamlFile = new File("src/main/resources/" + fileName + ".yml");

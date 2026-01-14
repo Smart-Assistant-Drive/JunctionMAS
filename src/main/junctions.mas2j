@@ -7,8 +7,6 @@ MAS agentssystem {
 	agents:
 		junction1 semaphore_junction;
 		timer1 timer_agent;
-		junction2 semaphore_junction;
-		timer2 timer_agent;
 
 	aslSourcePath:
 		"src/main/asl";

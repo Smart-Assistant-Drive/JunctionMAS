@@ -1,5 +1,12 @@
 junctions:
   - name: junction1
     port: 8095
-  - name: junction2
-    port: 8099
+    roads:
+      - name: A1
+        direction: 0
+      - name: B1
+        direction: 0
+      - name: A1
+        direction: 1
+      - name: B1
+        direction: 1
